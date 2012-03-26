@@ -494,14 +494,35 @@ featureset_ptr postgis_datasource::features(const query& q) const
                 throw mapnik::datasource_exception("Postgis Plugin: " + s_error.str());
             }
 
+            boost::optional<mapnik::boolean> simplify_opt =
+                params_.get<mapnik::boolean>("simplify", false);
+
+            bool simplify = simplify_opt && *simplify_opt;
+
             std::ostringstream s;
             s << "SELECT ";
             if (st_)
                 s << "ST_";
             if (force2d_)
-                s << "AsBinary(ST_Force_2D(\"" << geometryColumn_ << "\")) AS geom";
+                s << "AsBinary(ST_Force_2D(";
             else
-                s << "AsBinary(\"" << geometryColumn_ << "\") AS geom";
+                s << "AsBinary(";
+
+            if (simplify) s << "ST_Simplify(";
+
+            s << "\"" << geometryColumn_ << "\"";
+
+            if (simplify) { 
+              double px_gw = 1.0/boost::get<0>(q.resolution());
+              double px_gh = 1.0/boost::get<1>(q.resolution());
+
+              double tolerance = std::min(px_gw,px_gh);
+              s << ", " << tolerance << ")";
+            }
+
+            if (force2d_) s << ")";
+
+            s << ") AS geom";
 
             if (!key_field_.empty()) 
                 mapnik::quote_attr(s,key_field_);
@@ -522,7 +543,7 @@ featureset_ptr postgis_datasource::features(const query& q) const
             if (row_limit_ > 0) {
                 s << " LIMIT " << row_limit_;
             }
-         
+
             boost::shared_ptr<IResultSet> rs = get_resultset(conn, s.str());
             unsigned num_attr = props.size();
             if (!key_field_.empty())

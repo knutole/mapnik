@@ -102,7 +102,6 @@ public:
 #endif
 
         mapnik::timer timeout;
-        bool timed_out = false;
 
         PGresult* result = 0;
         int success;
@@ -151,9 +150,19 @@ std::cout << " consuming input success was " << success << std::endl;
               int ret = select(sock + 1, &input_mask, NULL, NULL, &toutval);
               if ( ret < 1 )
               {
-                timed_out = ( ret == 0 );
-                success = false;
-                break;
+                bool timed_out = ( ret == 0 );
+                std::stringstream ss;
+                ss << "Postgis Plugin: ";
+                if ( ret == 0 ) {
+                  ss << "timeout ";
+                } else {
+                  ss << "select: " << strerror(errno);
+                }
+                ss << "\nFull sql was: '";
+                ss << sql;
+                ss << "'\n";
+                const_cast<Connection*>(this)->close();
+                throw mapnik::datasource_exception(ss.str());
               }
             }
           } while ( PQisBusy(conn_) );
@@ -172,12 +181,11 @@ std::cout << " Result was " << ok << std::endl;
         if (!ok) 
         {
             std::string err_msg = "Postgis Plugin: ";
-            err_msg += timed_out ? "timeout " : status();
+            err_msg += status();
             err_msg += "\nFull sql was: '";
             err_msg += sql;
             err_msg += "'\n";
             if (result) PQclear(result);
-            if ( timed_out ) const_cast<Connection*>(this)->close();
             throw mapnik::datasource_exception(err_msg);
         }
 

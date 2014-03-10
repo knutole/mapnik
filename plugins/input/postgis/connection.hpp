@@ -130,13 +130,10 @@ public:
         fd_set input_mask;
         struct timeval toutval;
         while ( true ) {
-std::cout << "Getting result" << std::endl;
           do {
 
             // TODO: select() on PQsocket(), with a timeout..
-std::cout << " consuming input " << std::endl;
             success = PQconsumeInput(conn_);
-std::cout << " consuming input success was " << success << std::endl;
             if ( ! success ) break;
 
             if ( PQisBusy(conn_) ) {
@@ -170,11 +167,9 @@ std::cout << " consuming input success was " << success << std::endl;
             ok = false;
             break;
           }
-std::cout << "Getting result (should be non-blocking)" << std::endl;
           PGresult *tmp = PQgetResult(conn_);
           if ( ! tmp ) break;
           ok = (PQresultStatus(tmp) == PGRES_TUPLES_OK);
-std::cout << " Result was " << ok << std::endl;
           if ( result ) PQclear(result);
           result = tmp;
         }

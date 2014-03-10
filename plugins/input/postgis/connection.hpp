@@ -134,7 +134,6 @@ public:
         while ( true ) {
           do {
 
-            // TODO: select() on PQsocket(), with a timeout..
             success = PQconsumeInput(conn_);
             if ( ! success ) break;
 

@@ -147,7 +147,6 @@ public:
               int ret = select(sock + 1, &input_mask, NULL, NULL, &toutval);
               if ( ret < 1 )
               {
-                bool timed_out = ( ret == 0 );
                 std::stringstream ss;
                 ss << "Postgis Plugin: ";
                 if ( ret == 0 ) {

@@ -369,11 +369,32 @@ private:
     void read_multipolygon(boost::ptr_vector<geometry_type> & paths)
     {
         int num_polys = read_integer();
+        std::auto_ptr<geometry_type> poly(new geometry_type(Polygon));
         for (int i = 0; i < num_polys; ++i)
         {
             pos_ += 5;
-            read_polygon(paths);
+            int num_rings = read_integer();
+            if (num_rings > 0)
+            {
+                for (int i = 0; i < num_rings; ++i)
+                {
+                    int num_points = read_integer();
+                    if (num_points > 0)
+                    {
+                        CoordinateArray ar(num_points);
+                        read_coords(ar);
+                        poly->move_to(ar[0].x, ar[0].y);
+                        for (int j = 1; j < num_points ; ++j)
+                        {
+                            poly->line_to(ar[j].x, ar[j].y);
+                        }
+                        poly->close_path();
+                    }
+                }
+            }
         }
+        if (poly->size() > 3) // ignore if polygon has less than (3 + close_path) vertices
+            paths.push_back(poly);
     }
 
     void read_polygon_xyz(boost::ptr_vector<geometry_type> & paths)

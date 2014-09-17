@@ -107,6 +107,7 @@ private:
     mutable bool extent_initialized_;
     mutable mapnik::box2d<double> extent_;
     bool simplify_geometries_;
+    bool clip_geometries_;
     layer_descriptor desc_;
     ConnectionCreator<Connection> creator_;
     const std::string bbox_token_;

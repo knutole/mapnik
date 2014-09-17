@@ -70,6 +70,7 @@ postgis_datasource::postgis_datasource(parameters const& params)
       srid_(*params.get<mapnik::value_integer>("srid", 0)),
       extent_initialized_(false),
       simplify_geometries_(false),
+      clip_geometries_(*params_.get<mapnik::boolean_type>("clip_geometries", false)),
       desc_(postgis_datasource::name(), "utf-8"),
       creator_(params.get<std::string>("host"),
              params.get<std::string>("port"),
@@ -772,7 +773,18 @@ featureset_ptr postgis_datasource::features_with_context(query const& q,processo
           s << "ST_Simplify(";
         }
 
+        if (clip_geometries_) {
+          // We clip before ST_Simplify as ST_Simplify might
+          // output invalid polygons which would be a damage
+          // for ST_Intersection
+          s << "ST_Intersection(";
+        }
+
         s << "\"" << geometryColumn_ << "\"";
+
+        if (clip_geometries_) {
+          s << ", " << sql_bbox(box) << ")";
+        }
 
         if (simplify_geometries_) {
           // 1/20 of pixel seems to be a good compromise to avoid

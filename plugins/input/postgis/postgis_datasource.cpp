@@ -69,8 +69,10 @@ postgis_datasource::postgis_datasource(parameters const& params)
       type_(datasource::Vector),
       srid_(*params.get<mapnik::value_integer>("srid", 0)),
       extent_initialized_(false),
-      simplify_geometries_(false),
+      simplify_geometries_(*params_.get<mapnik::boolean_type>("simplify_geometries", false)),
+      simplify_geometries_max_resolution_(*params.get<mapnik::value_double>("simplify_geometries_max_resolution", FMAX)),
       clip_geometries_(*params_.get<mapnik::boolean_type>("clip_geometries", false)),
+      clip_geometries_min_resolution_(*params.get<mapnik::value_double>("clip_geometries_min_resolution", 0)),
       desc_(postgis_datasource::name(), "utf-8"),
       creator_(params.get<std::string>("host"),
              params.get<std::string>("port"),
@@ -125,8 +127,6 @@ postgis_datasource::postgis_datasource(parameters const& params)
     boost::optional<mapnik::boolean_type> autodetect_key_field = params.get<mapnik::boolean_type>("autodetect_key_field", false);
     boost::optional<mapnik::boolean_type> estimate_extent = params.get<mapnik::boolean_type>("estimate_extent", false);
     estimate_extent_ = estimate_extent && *estimate_extent;
-    boost::optional<mapnik::boolean_type> simplify_opt = params.get<mapnik::boolean_type>("simplify_geometries", false);
-    simplify_geometries_ = simplify_opt && *simplify_opt;
 
     ConnectionManager::instance().registerPool(creator_, *initial_size, pool_max_size_);
     CnxPool_ptr pool = ConnectionManager::instance().getPool(creator_.id());
@@ -764,16 +764,27 @@ featureset_ptr postgis_datasource::features_with_context(query const& q,processo
 
         std::ostringstream s;
 
-        const double px_gw = 1.0 / std::get<0>(q.resolution());
-        const double px_gh = 1.0 / std::get<1>(q.resolution());
+        const double px_hres = std::get<0>(q.resolution());
+        const double px_vres = std::get<1>(q.resolution());
+        const double px_min_res = std::min(px_hres, px_vres);
+        MAPNIK_LOG_WARN(postgis) << "postgis_datasource: px_min_res=" << px_min_res;
+        const double px_gw = 1.0 / px_hres;
+        const double px_gh = 1.0 / px_vres;
+        const double px_min_size = std::min(px_gw, px_gh);
+        MAPNIK_LOG_WARN(postgis) << "postgis_datasource: px_min_size=" << px_min_size;
+
+        bool do_clip = clip_geometries_ &&
+                        px_min_res > clip_geometries_min_resolution_;
+        bool do_simp = simplify_geometries_ &&
+                        px_min_res < simplify_geometries_max_resolution_;
 
         s << "SELECT ST_AsBinary(";
 
-        if (simplify_geometries_) {
+        if (do_simp) {
           s << "ST_Simplify(";
         }
 
-        if (clip_geometries_) {
+        if (do_clip) {
           // We clip before ST_Simplify as ST_Simplify might
           // output invalid polygons which would be a damage
           // for ST_Intersection
@@ -782,15 +793,15 @@ featureset_ptr postgis_datasource::features_with_context(query const& q,processo
 
         s << "\"" << geometryColumn_ << "\"";
 
-        if (clip_geometries_) {
+        if (do_clip) {
           s << ", " << sql_bbox(box) << ")";
         }
 
-        if (simplify_geometries_) {
+        if (do_simp) {
           // 1/20 of pixel seems to be a good compromise to avoid
           // drop of collapsed polygons.
           // See https://github.com/mapnik/mapnik/issues/1639
-          const double tolerance = std::min(px_gw, px_gh) / 20.0;
+          const double tolerance = px_min_size / 20.0;
           s << ", " << tolerance << ")";
         }
 
